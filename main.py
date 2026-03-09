@@ -18,10 +18,16 @@ def format_time(seconds):
 def download_audio_only(url, output_filename):
     if os.path.exists(output_filename):
         os.remove(output_filename)
-    ydl_opts = {'format': 'bestaudio/best', 'outtmpl': output_filename}
+    ydl_opts = {
+        'format': 'bestaudio/best', 
+        'outtmpl': output_filename,
+        'source_address': '0.0.0.0',
+        'http_headers': {
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36'
+        }
+    }
     with yt_dlp.YoutubeDL(ydl_opts) as ydl:
         ydl.download([url])
-
 
 def download_clip_only(url, output_filename, start_sec, end_sec):
     if os.path.exists(output_filename):
@@ -30,11 +36,14 @@ def download_clip_only(url, output_filename, start_sec, end_sec):
         'format': 'bestvideo[ext=mp4]+bestaudio[ext=m4a]/best[ext=mp4]/best',
         'outtmpl': output_filename,
         'download_ranges': download_range_func(None, [(start_sec, end_sec)]),
-        'force_keyframes_at_cuts': True
+        'force_keyframes_at_cuts': True,
+        'source_address': '0.0.0.0',
+        'http_headers': {
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36'
+        }
     }
     with yt_dlp.YoutubeDL(ydl_opts) as ydl:
         ydl.download([url])
-
 
 def find_best_clips_cloud(audio_path, api_key):
     genai.configure(api_key=api_key)
@@ -160,4 +169,5 @@ if st.session_state.clips:
                 st.download_button("💾 Download Final Short", data=file, file_name=f"Clips_Zahanat_Op{i + 1}.mp4",
                                    mime="video/mp4")
         st.divider()
+
 
