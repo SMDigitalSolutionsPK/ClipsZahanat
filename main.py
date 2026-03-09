@@ -78,22 +78,28 @@ def find_best_clips_cloud(audio_path, api_key):
 
 def make_vertical_short(input_file, output_file):
     video = VideoFileClip(input_file)
-    width, height = video.size
-    new_width = height * (9 / 16)
-
+    w, h = video.size
+    
+    # Calculate new width for 9:16 aspect ratio
+    new_w = int(h * (9 / 16))
+    
+    # FFmpeg strictly requires even numbers for video dimensions
+    if new_w % 2 != 0:
+        new_w -= 1
+        
     vertical_clip = video.cropped(
-        width=new_width,
-        height=height,
-        x_center=width / 2,
-        y_center=height / 2
+        x_center=w / 2,
+        y_center=h / 2,
+        width=new_w,
+        height=h
     )
-
+    
     vertical_clip.write_videofile(
-        output_file,
-        codec="libx264",
+        output_file, 
+        codec="libx264", 
         audio_codec="aac",
-        preset="ultrafast",
-        threads=4
+        preset="ultrafast", 
+        threads=4 
     )
 
 
@@ -154,3 +160,4 @@ if st.session_state.clips:
                 st.download_button("💾 Download Final Short", data=file, file_name=f"Clips_Zahanat_Op{i + 1}.mp4",
                                    mime="video/mp4")
         st.divider()
+
