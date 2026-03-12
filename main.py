@@ -25,7 +25,6 @@ def get_transcript_text(video_url):
     video_id = extract_video_id(video_url)
     try:
         transcript_list = YouTubeTranscriptApi.list_transcripts(video_id)
-        # Force grab the very first available transcript
         transcript = next(iter(transcript_list))
         text_data = transcript.fetch()
         
@@ -39,13 +38,11 @@ def get_transcript_text(video_url):
 def download_audio_only(url, output_filename):
     if os.path.exists(output_filename):
         os.remove(output_filename)
+    # Applying the Android mobile app disguise here
     ydl_opts = {
         'format': 'bestaudio/best', 
         'outtmpl': output_filename,
-        'source_address': '0.0.0.0',
-        'http_headers': {
-            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36'
-        }
+        'extractor_args': {'youtube': ['player_client=android']}
     }
     with yt_dlp.YoutubeDL(ydl_opts) as ydl:
         ydl.download([url])
@@ -53,15 +50,13 @@ def download_audio_only(url, output_filename):
 def download_clip_only(url, output_filename, start_sec, end_sec):
     if os.path.exists(output_filename):
         os.remove(output_filename)
+    # Applying the Android mobile app disguise here too
     ydl_opts = {
         'format': 'bestvideo[ext=mp4]+bestaudio[ext=m4a]/best[ext=mp4]/best',
         'outtmpl': output_filename,
         'download_ranges': download_range_func(None, [(start_sec, end_sec)]),
         'force_keyframes_at_cuts': True,
-        'source_address': '0.0.0.0',
-        'http_headers': {
-            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36'
-        }
+        'extractor_args': {'youtube': ['player_client=android']}
     }
     with yt_dlp.YoutubeDL(ydl_opts) as ydl:
         ydl.download([url])
