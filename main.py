@@ -25,7 +25,7 @@ def get_transcript_text(video_url):
     video_id = extract_video_id(video_url)
     try:
         transcript_list = YouTubeTranscriptApi.list_transcripts(video_id)
-        # Force grab the very first available transcript no matter the language
+        # Force grab the very first available transcript
         transcript = next(iter(transcript_list))
         text_data = transcript.fetch()
         
@@ -35,6 +35,20 @@ def get_transcript_text(video_url):
         return text
     except Exception:
         return None
+
+def download_audio_only(url, output_filename):
+    if os.path.exists(output_filename):
+        os.remove(output_filename)
+    ydl_opts = {
+        'format': 'bestaudio/best', 
+        'outtmpl': output_filename,
+        'source_address': '0.0.0.0',
+        'http_headers': {
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36'
+        }
+    }
+    with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+        ydl.download([url])
 
 def download_clip_only(url, output_filename, start_sec, end_sec):
     if os.path.exists(output_filename):
@@ -57,7 +71,7 @@ def find_best_clips_text(transcript_text, api_key):
     model = genai.GenerativeModel('gemini-2.5-flash')
     
     prompt = f"""
-    You are an expert video editor. Read this video transcript.
+    You are an expert video editor. Read this video transcript (which may be in English, Urdu, Hindi, or Roman Urdu).
     Find the top 3 most engaging continuous clips for viral shorts.
     Each clip MUST be between 15 and 60 seconds long.
     Use the exact timestamps from the transcript. Do not guess.
@@ -77,11 +91,38 @@ def find_best_clips_text(transcript_text, api_key):
     Transcript:
     {transcript_text}
     """
-    
     response = model.generate_content(prompt)
+    return parse_ai_response(response.text)
+
+def find_best_clips_cloud(audio_path, api_key):
+    genai.configure(api_key=api_key)
+    uploaded_file = genai.upload_file(path=audio_path)
     
+    model = genai.GenerativeModel('gemini-2.5-flash')
+    prompt = """
+    You are an expert video editor. Listen to this audio track (which may be in English, Urdu, Hindi, or Roman Urdu) and find the top 3 most engaging continuous clips for viral shorts.
+    Each clip MUST be between 15 and 60 seconds long.
+    Return the result EXACTLY in this format, with no other text:
+    Title: [Catchy Title 1]
+    Start: [number]
+    End: [number]
+    ---
+    Title: [Catchy Title 2]
+    Start: [number]
+    End: [number]
+    ---
+    Title: [Catchy Title 3]
+    Start: [number]
+    End: [number]
+    """
+    
+    response = model.generate_content([prompt, uploaded_file])
+    genai.delete_file(uploaded_file.name)
+    return parse_ai_response(response.text)
+
+def parse_ai_response(text):
     clips = []
-    blocks = response.text.strip().split('---')
+    blocks = text.strip().split('---')
     for block in blocks:
         lines = [line.strip() for line in block.strip().split('\n') if line.strip()]
         if len(lines) >= 3:
@@ -117,6 +158,7 @@ def make_vertical_short(input_file, output_file):
         threads=4 
     )
 
+# --- WEB INTERFACE ---
 st.set_page_config(page_title="Clips Zahanat Maker", layout="centered")
 st.title("✂️ Clips Zahanat Maker")
 
@@ -130,17 +172,21 @@ if st.button("1. Analyze Video & Find Hooks"):
     if not video_link or not api_key:
         st.error("Please provide both a video link and a Google Gemini API key.")
     else:
-        with st.status("Analyzing script instantly...", expanded=True) as status:
-            st.write("Fetching YouTube subtitles...")
+        with st.status("Analyzing video...", expanded=True) as status:
+            st.write("Attempting to fetch YouTube subtitles (Plan A)...")
             transcript_data = get_transcript_text(video_link)
             
-            if not transcript_data:
-                st.error("❌ This specific video has its subtitles completely disabled by the creator. Try another video link!")
-                status.update(label="Failed to get subtitles.", state="error")
-                st.stop()
+            if transcript_data:
+                st.write("✅ Subtitles found! Asking Gemini to find the top 3 hooks...")
+                st.session_state.clips = find_best_clips_text(transcript_data, api_key)
+            else:
+                st.warning("⚠️ No subtitles available. Switching to AI Audio Listening (Plan B)...")
+                audio_file = f"{WORK_DIR}/temp_audio.m4a"
+                st.write("Downloading audio track...")
+                download_audio_only(video_link, audio_file)
+                st.write("☁️ Uploading to Gemini Cloud for audio analysis...")
+                st.session_state.clips = find_best_clips_cloud(audio_file, api_key)
                 
-            st.write("Asking Gemini to find the top 3 hooks...")
-            st.session_state.clips = find_best_clips_text(transcript_data, api_key)
             status.update(label="Analysis complete! Choose your favorite clip below.", state="complete")
 
 if st.session_state.clips:
@@ -192,4 +238,3 @@ if st.session_state.clips:
             if os.path.exists(final_short):
                 with open(final_short, "rb") as file:
                     st.download_button(f"💾 Download Option {i+1}", data=file, file_name=f"Clips_Zahanat_Op{i+1}.mp4", mime="video/mp4", key=f"dl_all_{i}")
-                    
